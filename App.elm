@@ -38,7 +38,7 @@ type alias MessagePayloadInnerJson =
     }
 
 type MessagePushJet
-    = MessageOk      MessageOkJson
+    = MessageStatus  MessageOkJson
     | MessagePayload MessagePayloadJson
 
 messageOKDecoder      =
@@ -52,10 +52,11 @@ messagePayloadInnerDecoder =
 
 messagePushJetDecoder json =
     case Json.Decode.decodeString messageOKDecoder json of
-        Ok ok -> Ok (MessageOk ok)
+        Ok ok -> Ok (MessageStatus ok)
         Err _ -> case Json.Decode.decodeString messagePayloadDecoder json of
             Ok ok -> Ok (MessagePayload ok)
             Err _ -> Err "Could not parse JSON"
+-- json decoding end
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg { uuid, messages } =
@@ -65,7 +66,7 @@ update msg { uuid, messages } =
                 Ok  msg ->
                     ({uuid = uuid, messages = messages ++ [ msg ]}, Cmd.none)
                 Err msg ->
-                    ({uuid = uuid, messages = messages }, Cmd.none) -- TODO
+                    ({uuid = uuid, messages = messages ++ [ MessageStatus (MessageOkJson msg) ]}, Cmd.none)
         UpdateUUID uuid ->
             ({uuid = uuid, messages = messages }, Cmd.none)
         InitWS ->
@@ -87,7 +88,7 @@ view model =
 viewMessage : MessagePushJet -> Html Msg
 viewMessage msg =
     case msg of
-        MessageOk      msg -> 
+        MessageStatus  msg ->
             div [] [ text ("status: " ++ msg.status) ]
         MessagePayload msg ->
             div []
