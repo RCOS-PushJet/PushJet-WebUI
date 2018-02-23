@@ -13,20 +13,13 @@ type alias Model =
 
 main : Program Never Model Msg
 main = program
-    { init = init
+    { init =
+        let uuid = "2aac6626-b783-48d1-881e-fc0eb99659d1" in
+        ({ uuid = uuid, messages = [ ] }, (WebSocket.send pushJetWebSocket uuid))
     , view = view
     , update = update
     , subscriptions = subscriptions
     }
-
-init : (Model, Cmd Msg)
-init =
-    ({ uuid = "", messages = [ ] }, Cmd.none)
-
-type Msg
-    = NewMsg     String
-    | UpdateUUID String
-    | InitWS
 
 -- some JSON payloads that we will accept
 type alias MessageOkJson      = { status : String }
@@ -58,6 +51,9 @@ messagePushJetDecoder json =
             Err _ -> Err "Could not parse JSON"
 -- json decoding end
 
+type Msg
+    = NewMsg     String
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg { uuid, messages } =
     case msg of
@@ -67,11 +63,6 @@ update msg { uuid, messages } =
                     ({uuid = uuid, messages = messages ++ [ msg ]}, Cmd.none)
                 Err msg ->
                     ({uuid = uuid, messages = messages ++ [ MessageStatus (MessageOkJson msg) ]}, Cmd.none)
-        UpdateUUID uuid ->
-            ({uuid = uuid, messages = messages }, Cmd.none)
-        InitWS ->
-            ({uuid = uuid, messages = messages },
-             (WebSocket.send pushJetWebSocket uuid))
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -80,10 +71,7 @@ subscriptions model =
 view : Model -> Html Msg
 view model =
     div []
-        [ input  [ onInput UpdateUUID ] []
-        , button [ onClick InitWS ] [text "Submit UUID"]
-        , div [] (List.map viewMessage model.messages)
-        ]
+        [ div [] (List.map viewMessage model.messages) ]
 
 viewMessage : MessagePushJet -> Html Msg
 viewMessage msg =
@@ -93,3 +81,4 @@ viewMessage msg =
         MessagePayload msg ->
             div []
                 [ a [ href msg.message.link ] [ text (msg.message.title ++ ": " ++ msg.message.message) ] ]
+-- vim:ft=haskell:
