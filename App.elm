@@ -5,6 +5,7 @@ import Html.Attributes exposing (..)
 import WebSocket
 import Json.Decode
 
+-- pushJetWebSocket = "wss://ec2-34-217-64-134.us-west-2.compute.amazonaws.com/ws"
 pushJetWebSocket = "wss://api.pushjet.io/ws"
 
 type alias Model =
@@ -16,7 +17,9 @@ main : Program Never Model Msg
 main = program
     { init =
         let uuid = "2aac6626-b783-48d1-881e-fc0eb99659d1"
-            url  = "http://api.pushjet.io/message?uuid=" ++ uuid
+            -- don't worry too much about this, it's an nginx reverse proxy which sets the
+            -- Access-Control-Allow-Origin: * header
+            url  = "http://ec2-34-217-64-134.us-west-2.compute.amazonaws.com/message?uuid=" ++ uuid
             req  = Http.get url messageOldDecoder in
         ({ uuid = uuid, messages = [ ] }, (Http.send OldMsg req))
     , view = view
@@ -37,9 +40,9 @@ type MessagePushJet
     = MessageStatus  MessageOkJson
     | MessagePayload MessagePayloadJson
 
-messageOldDecoder : Json.Decode.Decoder (List MessagePushJet)
+messageOldDecoder : Json.Decode.Decoder (List MessagePayloadInnerJson)
 messageOldDecoder =
-    Json.Decode.map (\x -> List.map MessagePayload x) (Json.Decode.list messagePayloadDecoder)
+        (Json.Decode.field "messages" (Json.Decode.list messagePayloadInnerDecoder))
 
 messageOKDecoder      =
     Json.Decode.map  MessageOkJson      (Json.Decode.field "status"  Json.Decode.string)
@@ -59,19 +62,20 @@ messagePushJetDecoder json =
 -- json decoding end
 
 type Msg
-    = OldMsg (Result Http.Error (List MessagePushJet))
+    = OldMsg (Result Http.Error (List MessagePayloadInnerJson))
     | NewMsg String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg { uuid, messages } =
+    let openWS = WebSocket.send pushJetWebSocket uuid in
     case msg of
         -- handle old fetched messages and send our uuid to the websocket
-        OldMsg     (Ok newMessages) ->
-            ({uuid = uuid, messages = messages ++ newMessages}, WebSocket.send pushJetWebSocket uuid)
-        OldMsg     (Err _)          ->
-            ({uuid = uuid, messages = messages},                WebSocket.send pushJetWebSocket uuid)
+        OldMsg (Ok newMessages) ->
+            ({uuid = uuid, messages = messages ++ (List.map (\x -> MessagePayload (MessagePayloadJson x)) newMessages)}, openWS)
+        OldMsg (Err _)          ->
+            ({uuid = uuid, messages = messages},                                                                         openWS)
         -- handle new messages that come from the web socket
-        NewMsg     json ->
+        NewMsg json ->
             case messagePushJetDecoder json of
                 Ok  msg ->
                     ({uuid = uuid, messages = messages ++ [ msg ]}, Cmd.none)
