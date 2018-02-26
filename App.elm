@@ -1,3 +1,4 @@
+import Http            exposing (..)
 import Html            exposing (..)
 import Html.Events     exposing (..)
 import Html.Attributes exposing (..)
@@ -14,8 +15,10 @@ type alias Model =
 main : Program Never Model Msg
 main = program
     { init =
-        let uuid = "2aac6626-b783-48d1-881e-fc0eb99659d1" in
-        ({ uuid = uuid, messages = [ ] }, (WebSocket.send pushJetWebSocket uuid))
+        let uuid = "2aac6626-b783-48d1-881e-fc0eb99659d1"
+            url  = "http://api.pushjet.io/message?uuid=" ++ uuid
+            req  = Http.get url messageOldDecoder in
+        ({ uuid = uuid, messages = [ ] }, (Http.send OldMsg req))
     , view = view
     , update = update
     , subscriptions = subscriptions
@@ -33,6 +36,10 @@ type alias MessagePayloadInnerJson =
 type MessagePushJet
     = MessageStatus  MessageOkJson
     | MessagePayload MessagePayloadJson
+
+messageOldDecoder : Json.Decode.Decoder (List MessagePushJet)
+messageOldDecoder =
+    Json.Decode.map (\x -> List.map MessagePayload x) (Json.Decode.list messagePayloadDecoder)
 
 messageOKDecoder      =
     Json.Decode.map  MessageOkJson      (Json.Decode.field "status"  Json.Decode.string)
@@ -52,11 +59,18 @@ messagePushJetDecoder json =
 -- json decoding end
 
 type Msg
-    = NewMsg     String
+    = OldMsg (Result Http.Error (List MessagePushJet))
+    | NewMsg String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg { uuid, messages } =
     case msg of
+        -- handle old fetched messages and send our uuid to the websocket
+        OldMsg     (Ok newMessages) ->
+            ({uuid = uuid, messages = messages ++ newMessages}, WebSocket.send pushJetWebSocket uuid)
+        OldMsg     (Err _)          ->
+            ({uuid = uuid, messages = messages},                WebSocket.send pushJetWebSocket uuid)
+        -- handle new messages that come from the web socket
         NewMsg     json ->
             case messagePushJetDecoder json of
                 Ok  msg ->
