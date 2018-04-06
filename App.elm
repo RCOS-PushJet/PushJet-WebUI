@@ -3,9 +3,10 @@ import Html            exposing (..)
 import Html.Events     exposing (..)
 import Html.Attributes exposing (..)
 import WebSocket
-import Json.Decode
+import Navigation
 
--- pushJetWebSocket = "wss://ec2-34-217-64-134.us-west-2.compute.amazonaws.com/ws"
+import Messages        exposing (..)
+
 pushJetWebSocket = "wss://api.pushjet.io/ws"
 
 type alias Model =
@@ -27,40 +28,6 @@ main = program
     , subscriptions = subscriptions
     }
 
--- some JSON payloads that we will accept
-type alias MessageOkJson      = { status : String }
-type alias MessagePayloadJson = { message: MessagePayloadInnerJson }
-type alias MessagePayloadInnerJson =
-    { title     : String
-    , message   : String
-    , link      : String
-    }
-
-type MessagePushJet
-    = MessageStatus  MessageOkJson
-    | MessagePayload MessagePayloadJson
-
-messageOldDecoder : Json.Decode.Decoder (List MessagePayloadInnerJson)
-messageOldDecoder =
-        (Json.Decode.field "messages" (Json.Decode.list messagePayloadInnerDecoder))
-
-messageOKDecoder      =
-    Json.Decode.map  MessageOkJson      (Json.Decode.field "status"  Json.Decode.string)
-messagePayloadDecoder =
-    Json.Decode.map  MessagePayloadJson (Json.Decode.field "message" messagePayloadInnerDecoder)
-messagePayloadInnerDecoder =
-    Json.Decode.map3 MessagePayloadInnerJson (Json.Decode.field "title"   Json.Decode.string)
-                                             (Json.Decode.field "message" Json.Decode.string)
-                                             (Json.Decode.field "link"    Json.Decode.string)
-
-messagePushJetDecoder json =
-    case Json.Decode.decodeString messageOKDecoder json of
-        Ok ok -> Ok (MessageStatus ok)
-        Err _ -> case Json.Decode.decodeString messagePayloadDecoder json of
-            Ok ok -> Ok (MessagePayload ok)
-            Err _ -> Err "Could not parse JSON"
--- json decoding end
-
 type Msg
     = OldMsg (Result Http.Error (List MessagePayloadInnerJson))
     | NewMsg String
@@ -71,9 +38,9 @@ update msg { uuid, messages } =
     case msg of
         -- handle old fetched messages and send our uuid to the websocket
         OldMsg (Ok newMessages) ->
-            ({uuid = uuid, messages = messages ++ (List.map (\x -> MessagePayload (MessagePayloadJson x)) newMessages)}, openWS)
+            ({uuid = uuid, messages = messages ++ (List.map (MessagePayload << MessagePayloadJson) newMessages)}, openWS)
         OldMsg (Err _)          ->
-            ({uuid = uuid, messages = messages},                                                                         openWS)
+            ({uuid = uuid, messages = messages},                                                                  openWS)
         -- handle new messages that come from the web socket
         NewMsg json ->
             case messagePushJetDecoder json of
