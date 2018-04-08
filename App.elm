@@ -25,7 +25,7 @@ main = program
         ({ uuid = uuid, messages = [ ] }, (Http.send OldMsg req))
     , view = view
     , update = update
-    , subscriptions = subscriptions
+    , subscriptions = (\_ -> WebSocket.listen pushJetWebSocket NewMsg)
     }
 
 type Msg
@@ -36,22 +36,16 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg { uuid, messages } =
     let openWS = WebSocket.send pushJetWebSocket uuid in
     case msg of
-        -- handle old fetched messages and send our uuid to the websocket
         OldMsg (Ok newMessages) ->
             ({uuid = uuid, messages = messages ++ (List.map (MessagePayload << MessagePayloadJson) newMessages)}, openWS)
         OldMsg (Err _)          ->
-            ({uuid = uuid, messages = messages},                                                                  openWS)
-        -- handle new messages that come from the web socket
+            ({uuid = uuid, messages = messages }, openWS)
         NewMsg json ->
             case messagePushJetDecoder json of
                 Ok  msg ->
                     ({uuid = uuid, messages = messages ++ [ msg ]}, Cmd.none)
                 Err msg ->
                     ({uuid = uuid, messages = messages ++ [ MessageStatus (MessageOkJson msg) ]}, Cmd.none)
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    WebSocket.listen pushJetWebSocket NewMsg
 
 view : Model -> Html Msg
 view model =
