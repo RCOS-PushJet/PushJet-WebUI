@@ -2,60 +2,78 @@ import Http            exposing (..)
 import Html            exposing (..)
 import Html.Events     exposing (..)
 import Html.Attributes exposing (..)
+import Json.Decode     exposing (..)
 import WebSocket
-import Navigation
+import Uuid
+
+import Random.Pcg as Random
 
 import Messages        exposing (..)
 
 
--- TODO: read uuid from query param?
---    or read device id from query param to subscribe?
--- TODO: handle subscription message
-
-
 type alias Model =
-    { uuid     : String
+    { public   : String
+    , uuid     : String
     , messages : List MessagePushJet
     }
+
+
+type Msg =
+    NewMsg  String
+  | GenUuid Int
+  | SubUuid Uuid.Uuid
+  | SubWS   (Result Http.Error Int)
 
 
 main : Program Never Model Msg
 main = program
     { init =
-        let uuid = "9f7b99e9-7e91-4d12-8527-1d782f8d03a6"
-            -- don't worry too much about this, it's an nginx reverse proxy which sets the
-            -- Access-Control-Allow-Origin: * header
-            url = "http://128.113.17.41:81/message?uuid=" ++ uuid in
-        ({ uuid = uuid, messages = [ ] }, WebSocket.send "ws://128.113.17.41:81/ws" uuid)
+        ( { public   = "b633-aa1685-129513384c94-26893-06d1766f1",
+            uuid     = "",
+            messages = [ ] },
+          Random.generate GenUuid (Random.int Random.minInt Random.maxInt)
+        )
     , view = view
     , update = update
     , subscriptions = (\_ -> WebSocket.listen "ws://128.113.17.41:81/ws" NewMsg)
     }
 
 
-type Msg
-    = NewMsg String
-
-
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
-        NewMsg json ->
-            case messagePushJetDecoder json of
+        GenUuid seed ->
+            (model, Random.generate SubUuid Uuid.uuidGenerator)
+        SubUuid uuid ->
+            let dev = Uuid.toString uuid in
+            let prt = Http.multipartBody [ Http.stringPart "uuid"    dev
+                                         , Http.stringPart "service" model.public
+                                         ] in
+            let req = Http.post "http://128.113.17.41:81/subscription" prt (succeed 200) in
+                ({ model | uuid = dev }, Http.send SubWS req)
+        SubWS   _ ->
+            (model, WebSocket.send "ws://128.113.17.41:81/ws" model.uuid)
+        NewMsg  jsn ->
+            case messagePushJetDecoder jsn of
                 Ok  msg ->
-                    ({ model | messages = model.messages ++ [ msg ]}, Cmd.none)
+                    ({ model | messages = model.messages ++ [ msg ] }, Cmd.none)
                 Err msg ->
-                    (model, Cmd.none)
+                    (model , Cmd.none)
 
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ div [] (List.map viewMessage model.messages) ]
+    div [] (List.map viewMessage model.messages)
+
+
 viewMessage : MessagePushJet -> Html Msg
 viewMessage msg =
     case msg of
         MessagePayload msg ->
-            div []
-                [ a [ href msg.message.link ] [ text (msg.message.title ++ ": " ++ msg.message.message) ] ]
+            if msg.message.link == "" then
+                div []
+                    [ text (msg.message.title ++ ": " ++ msg.message.message) ]
+            else
+                div []
+                    [ a [ href msg.message.link ] [ text (msg.message.title ++ ": " ++ msg.message.message) ] ]
 -- vim:ft=haskell:
