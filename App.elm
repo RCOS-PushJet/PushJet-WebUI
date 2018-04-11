@@ -4,9 +4,18 @@ import Html.Events     exposing (..)
 import Html.Attributes exposing (..)
 import Json.Decode     exposing (..)
 import WebSocket
+import Array
 import Uuid
 
-import Random.Pcg as Random
+import Random.Pcg       as Random
+import Bootstrap.CDN    as CDN
+import Bootstrap.Grid   as Grid
+import Bootstrap.Navbar as Navbar
+import Bootstrap.Button as Button
+import Bootstrap.Card   as Card
+import Bootstrap.Grid.Row as Row
+import Bootstrap.Grid.Col as Col
+import Bootstrap.Card.Block as Block
 
 import Messages        exposing (..)
 
@@ -23,6 +32,10 @@ type Msg =
   | GenUuid Int
   | SubUuid Uuid.Uuid
   | SubWS   (Result Http.Error Int)
+ 
+
+webSocketEndpoint = "ws://128.113.17.41:81/ws"
+subscribeEndpoint = "http://128.113.17.41:81/subscription"
 
 
 main : Program Never Model Msg
@@ -35,7 +48,7 @@ main = program
         )
     , view = view
     , update = update
-    , subscriptions = (\_ -> WebSocket.listen "ws://128.113.17.41:81/ws" NewMsg)
+    , subscriptions = (\_ -> WebSocket.listen webSocketEndpoint NewMsg)
     }
 
 
@@ -43,37 +56,79 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         GenUuid seed ->
-            (model, Random.generate SubUuid Uuid.uuidGenerator)
+            ( model, Random.generate SubUuid Uuid.uuidGenerator )
         SubUuid uuid ->
-            let dev = Uuid.toString uuid in
-            let prt = Http.multipartBody [ Http.stringPart "uuid"    dev
-                                         , Http.stringPart "service" model.public
-                                         ] in
-            let req = Http.post "http://128.113.17.41:81/subscription" prt (succeed 200) in
-                ({ model | uuid = dev }, Http.send SubWS req)
+            let prt = Http.multipartBody
+                        [ Http.stringPart "uuid"    (Uuid.toString uuid)
+                        , Http.stringPart "service" model.public
+                        ] in
+                ( { model | uuid = (Uuid.toString uuid) },
+                  Http.send SubWS (Http.post subscribeEndpoint prt (succeed 200))
+                )
         SubWS   _ ->
-            (model, WebSocket.send "ws://128.113.17.41:81/ws" model.uuid)
+            ( model, WebSocket.send webSocketEndpoint model.uuid )
         NewMsg  jsn ->
             case messagePushJetDecoder jsn of
                 Ok  msg ->
-                    ({ model | messages = model.messages ++ [ msg ] }, Cmd.none)
+                    ( { model | messages = model.messages ++ [ msg ] }, Cmd.none )
                 Err msg ->
-                    (model , Cmd.none)
+                    ( model , Cmd.none )
 
 
 view : Model -> Html Msg
 view model =
-    div [] (List.map viewMessage model.messages)
+    Grid.container []
+        [ CDN.stylesheet
+        , Grid.row []
+            [ Grid.col [ Col.xs8 ]
+                (List.map viewMessage model.messages)
+            ] ]
 
 
 viewMessage : MessagePushJet -> Html Msg
 viewMessage msg =
     case msg of
         MessagePayload msg ->
-            if msg.message.link == "" then
-                div []
-                    [ text (msg.message.title ++ ": " ++ msg.message.message) ]
+            let s = case List.head (List.drop (msg.message.level-1) cardStyle) of
+                Just x  -> x
+                Nothing -> Card.primary in
+            -- TODO: There's gotta be a better way
+            if (msg.message.title /= "") && (msg.message.link /= "") then
+                Card.config [ s ]
+                  |> Card.headerH4 [] [ text msg.message.title ]
+                  |> Card.block []
+                      [ Block.text [] [ text msg.message.message ]
+                      , Block.custom <|
+                          Button.linkButton [ Button.primary, Button.attrs [ href msg.message.link ] ]
+                              [ text "link" ]
+                      ]
+                  |> Card.view
+            else if (msg.message.title == "") && (msg.message.link /= "") then
+                Card.config [ s ]
+                  |> Card.block []
+                      [ Block.text [] [ text msg.message.message ]
+                      , Block.custom <|
+                          Button.linkButton [ Button.primary, Button.attrs [ href msg.message.link ] ]
+                              [ text "link" ]
+                      ]
+                  |> Card.view
+            else if (msg.message.title /= "") && (msg.message.link == "") then
+                Card.config [ s ]
+                  |> Card.headerH4 [] [ text msg.message.title ]
+                  |> Card.block []
+                      [ Block.text [] [ text msg.message.message ] ]
+                  |> Card.view
             else
-                div []
-                    [ a [ href msg.message.link ] [ text (msg.message.title ++ ": " ++ msg.message.message) ] ]
+                Card.config [ s ]
+                  |> Card.block []
+                      [ Block.text [] [ text msg.message.message ] ]
+                  |> Card.view
+
+
+cardStyle =
+    [ Card.outlineInfo
+    , Card.outlineInfo
+    , Card.outlineInfo
+    , Card.warning
+    , Card.danger ]
 -- vim:ft=haskell:
