@@ -118,7 +118,7 @@ view model =
         [ CDN.stylesheet
           , Navbar.config NavbarMsg
             |> Navbar.withAnimation
-            |> Navbar.collapseMedium
+            |> Navbar.fixTop
             |> Navbar.lightCustom (Color.rgb 0x47 0x64 0xad)
             |> Navbar.brand
                   [ href "#" ]
@@ -126,26 +126,30 @@ view model =
                       [ img
                         [ src "https://files.readme.io/PBWzCbL3Qn2Trac8l1Vz_pushjet_jet.png"
                         , class "d-inline-block align-top"
-                        , style [ ("width", "30px") ] ]
+                        , style [ ("width", "30px") ]
+                        ]
                         []
-                      , (text " PushJet WebUI") ] ]
+                      , (text " PushJet WebUI")
+                      ] ]
             |> Navbar.customItems
                [ Navbar.formItem []
                    [ Input.text
                        [ Input.attrs
                            [ placeholder "Service Token"
-                           , onInput SavePub ] ]
+                           , onInput SavePub
+                           ] ]
                    , Button.button
                        [ Button.success
                        , Button.attrs
                            [ Spacing.ml2Sm
                            , onClick Submit
-                           ]
-                       ]
+                           ] ]
                        [ text "Go!" ] ] ]
             |> Navbar.view model.navbar
-        , div [] (List.map msgToAlert model.messages)
+        , div [ style [("margin-top", "60px")] ]
+            (List.map msgToAlert model.messages)
         ]
+
 
 msgToAlert msg =
     let children =

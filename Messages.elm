@@ -10,16 +10,18 @@ type alias MessagePayloadInnerJson =
     { title     : String
     , message   : String
     , link      : String
-    , level     : Int }
+    , level     : Int
+    , timestamp : Int }
 
 messagePayloadDecoder =
     Json.Decode.map2 MessagePushJet (Json.Decode.field "message" messagePayloadInnerDecoder)
                                     (Json.Decode.succeed Alert.shown)
 messagePayloadInnerDecoder =
-    Json.Decode.map4 MessagePayloadInnerJson (Json.Decode.field "title"   Json.Decode.string)
-                                             (Json.Decode.field "message" Json.Decode.string)
-                                             (Json.Decode.field "link"    Json.Decode.string)
-                                             (Json.Decode.field "level"   Json.Decode.int)
+    Json.Decode.map5 MessagePayloadInnerJson (Json.Decode.field "title"     Json.Decode.string)
+                                             (Json.Decode.field "message"   Json.Decode.string)
+                                             (Json.Decode.field "link"      Json.Decode.string)
+                                             (Json.Decode.field "level"     Json.Decode.int)
+                                             (Json.Decode.field "timestamp" Json.Decode.int)
 
 messagePushJetDecoder json =
     case Json.Decode.decodeString messagePayloadDecoder json of
