@@ -79,56 +79,32 @@ view : Model -> Html Msg
 view model =
     Grid.container []
         [ CDN.stylesheet
-        , Grid.row []
-            [ Grid.col [ Col.xs8 ]
-                (List.map viewMessage model.messages)
-            ] ]
+        , div [] (List.map viewMessage model.messages)
+        ]
 
 
 viewMessage : MessagePushJet -> Html Msg
 viewMessage msg =
     case msg of
         MessagePayload msg ->
-            let s = case List.head (List.drop (msg.message.level-1) cardStyle) of
-                Just x  -> x
-                Nothing -> Card.primary in
-            -- TODO: There's gotta be a better way
-            if (msg.message.title /= "") && (msg.message.link /= "") then
-                Card.config [ s ]
-                  |> Card.headerH4 [] [ text msg.message.title ]
-                  |> Card.block []
-                      [ Block.text [] [ text msg.message.message ]
-                      , Block.custom <|
-                          Button.linkButton [ Button.primary, Button.attrs [ href msg.message.link ] ]
-                              [ text "link" ]
-                      ]
-                  |> Card.view
-            else if (msg.message.title == "") && (msg.message.link /= "") then
-                Card.config [ s ]
-                  |> Card.block []
-                      [ Block.text [] [ text msg.message.message ]
-                      , Block.custom <|
-                          Button.linkButton [ Button.primary, Button.attrs [ href msg.message.link ] ]
-                              [ text "link" ]
-                      ]
-                  |> Card.view
-            else if (msg.message.title /= "") && (msg.message.link == "") then
-                Card.config [ s ]
-                  |> Card.headerH4 [] [ text msg.message.title ]
-                  |> Card.block []
-                      [ Block.text [] [ text msg.message.message ] ]
-                  |> Card.view
-            else
-                Card.config [ s ]
-                  |> Card.block []
-                      [ Block.text [] [ text msg.message.message ] ]
-                  |> Card.view
+            Card.config ((cardStyle msg.message.level) ++ [ Card.attrs [ class "mt-4" ] ])
+                |> Card.block [] (cardBlockContents msg.message)
+                |> Card.view
 
 
-cardStyle =
-    [ Card.outlineInfo
-    , Card.outlineInfo
-    , Card.outlineInfo
-    , Card.warning
-    , Card.danger ]
+cardBlockContents msg =
+    let block1 = [ ] in
+    let block2 = if msg.title == "" then block1 else (cardTitle msg.title) :: block1 in
+    let block3 = (Block.text [] [ text msg.message ]) :: block2                      in
+    let block4 = if msg.link  == "" then block3 else (cardLink msg.link)   :: block3 in
+    block4
+
+
+cardTitle t = Block.titleH5 [] [ text t ]
+cardLink  l = Block.custom <| Button.button [ Button.attrs [ href l ] ] [ text "link" ]
+cardStyle x =
+    case x of
+        4 -> [ Card.warning ]
+        5 -> [ Card.danger  ]
+        _ -> [ ]
 -- vim:ft=haskell:
