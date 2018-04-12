@@ -1,9 +1,6 @@
-# PushJet-LibNotify
+# PushJet-WebUI
 
 WebUI (Google Chrome, electron.js, etc) frontend for PushJet using the WebSockets API.
-
-Anyone on this projects channels will be held to the NodeJS code of conduct,
-Found here https://github.com/nodejs/admin/blob/master/CODE_OF_CONDUCT.md
 
 ## Limitations
 

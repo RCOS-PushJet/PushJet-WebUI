@@ -8,6 +8,8 @@ import Array
 import Uuid
 
 import Random.Pcg       as Random
+import Bootstrap.Alert  as Alert
+import Bootstrap.Navbar as Navbar
 import Bootstrap.CDN    as CDN
 import Bootstrap.Grid   as Grid
 import Bootstrap.Navbar as Navbar
@@ -16,6 +18,7 @@ import Bootstrap.Card   as Card
 import Bootstrap.Grid.Row as Row
 import Bootstrap.Grid.Col as Col
 import Bootstrap.Card.Block as Block
+import Bootstrap.Form.Input as Input
 
 import Messages        exposing (..)
 
@@ -24,15 +27,17 @@ type alias Model =
     { public   : String
     , uuid     : String
     , messages : List MessagePushJet
+    , navbar   : Navbar.State
     }
 
 
 type Msg =
-    NewMsg  String
-  | GenUuid Int
-  | SubUuid Uuid.Uuid
-  | SubWS   (Result Http.Error Int)
- 
+    NewMsg    String
+  | GenUuid   Int
+  | SubUuid   Uuid.Uuid
+  | SubWS     (Result Http.Error Int)
+  | NavbarMsg Navbar.State
+
 
 webSocketEndpoint = "ws://128.113.17.41:81/ws"
 subscribeEndpoint = "http://128.113.17.41:81/subscription"
@@ -41,15 +46,28 @@ subscribeEndpoint = "http://128.113.17.41:81/subscription"
 main : Program Never Model Msg
 main = program
     { init =
-        ( { public   = "b633-aa1685-129513384c94-26893-06d1766f1",
-            uuid     = "",
-            messages = [ ] },
-          Random.generate GenUuid (Random.int Random.minInt Random.maxInt)
+        let (navbarState, navbarCmd) = Navbar.initialState NavbarMsg in
+        ( { public   = "b633-aa1685-129513384c94-26893-06d1766f1"
+          , uuid     = ""
+          , messages = [ ]
+          , navbar   = navbarState },
+          Cmd.batch
+            [ Random.generate GenUuid (Random.int Random.minInt Random.maxInt)
+            , navbarCmd
+            ]
         )
     , view = view
     , update = update
-    , subscriptions = (\_ -> WebSocket.listen webSocketEndpoint NewMsg)
+    , subscriptions = subscriptions
     }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Navbar.subscriptions model.navbar NavbarMsg
+        , WebSocket.listen webSocketEndpoint NewMsg
+        ]
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -65,46 +83,40 @@ update msg model =
                 ( { model | uuid = (Uuid.toString uuid) },
                   Http.send SubWS (Http.post subscribeEndpoint prt (succeed 200))
                 )
-        SubWS   _ ->
+        SubWS _ ->
             ( model, WebSocket.send webSocketEndpoint model.uuid )
-        NewMsg  jsn ->
+        NewMsg jsn ->
             case messagePushJetDecoder jsn of
                 Ok  msg ->
                     ( { model | messages = model.messages ++ [ msg ] }, Cmd.none )
                 Err msg ->
                     ( model , Cmd.none )
+        NavbarMsg state ->
+            ( { model | navbar = state }, Cmd.none )
 
 
 view : Model -> Html Msg
 view model =
     Grid.container []
         [ CDN.stylesheet
-        , div [] (List.map viewMessage model.messages)
+        , Navbar.config NavbarMsg
+            |> Navbar.withAnimation
+            |> Navbar.collapseMedium
+            |> Navbar.info
+            |> Navbar.brand
+                 [ href "#" ]
+                 [ text "PushJet" ]
+            |> Navbar.view model.navbar
+        , div [] (List.map msgToAlert model.messages)
         ]
 
-
-viewMessage : MessagePushJet -> Html Msg
-viewMessage msg =
+msgToAlert msg =
     case msg of
         MessagePayload msg ->
-            Card.config ((cardStyle msg.message.level) ++ [ Card.attrs [ class "mt-4" ] ])
-                |> Card.block [] (cardBlockContents msg.message)
-                |> Card.view
+            Alert.simpleInfo []
+                [ Alert.h4 [] [ text msg.message.title ]
+                , text msg.message.message
+                , Alert.link [ href msg.message.link ] [ text "link" ]
+                ]
 
-
-cardBlockContents msg =
-    let block1 = [ ] in
-    let block2 = if msg.title == "" then block1 else (cardTitle msg.title) :: block1 in
-    let block3 = (Block.text [] [ text msg.message ]) :: block2                      in
-    let block4 = if msg.link  == "" then block3 else (cardLink msg.link)   :: block3 in
-    block4
-
-
-cardTitle t = Block.titleH5 [] [ text t ]
-cardLink  l = Block.custom <| Button.button [ Button.attrs [ href l ] ] [ text "link" ]
-cardStyle x =
-    case x of
-        4 -> [ Card.warning ]
-        5 -> [ Card.danger  ]
-        _ -> [ ]
--- vim:ft=haskell:
+-- -- vim:ft=haskell:
