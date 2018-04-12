@@ -21,6 +21,7 @@ import Bootstrap.Grid.Row as Row
 import Bootstrap.Grid.Col as Col
 import Bootstrap.Card.Block as Block
 import Bootstrap.Form.Input as Input
+import Bootstrap.Utilities.Spacing as Spacing
 
 import Messages        exposing (..)
 
@@ -35,9 +36,13 @@ type alias Model =
 
 type Msg =
     NewMsg    String
+
+  | SavePub   String
+  | Submit
   | GenUuid   Int
   | SubUuid   Uuid.Uuid
   | SubWS     (Result Http.Error Int)
+
   | NavbarMsg Navbar.State
   | AlertMsg  MessagePushJet Alert.Visibility
 
@@ -50,14 +55,11 @@ main : Program Never Model Msg
 main = program
     { init =
         let (navbarState, navbarCmd) = Navbar.initialState NavbarMsg in
-        ( { public   = "b633-aa1685-129513384c94-26893-06d1766f1"
+        ( { public   = ""
           , uuid     = ""
-          , messages = [ ]
+          , messages = []
           , navbar   = navbarState },
-          Cmd.batch
-            [ Random.generate GenUuid (Random.int Random.minInt Random.maxInt)
-            , navbarCmd
-            ]
+          navbarCmd
         )
     , view = view
     , update = update
@@ -76,6 +78,12 @@ subscriptions model =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
+        SavePub pub ->
+            ( { model | public = pub },
+              Cmd.none
+            )
+        Submit ->
+            ( model, Random.generate GenUuid (Random.int Random.minInt Random.maxInt) )
         GenUuid seed ->
             ( model, Random.generate SubUuid Uuid.uuidGenerator )
         SubUuid uuid ->
@@ -83,9 +91,9 @@ update msg model =
                         [ Http.stringPart "uuid"    (Uuid.toString uuid)
                         , Http.stringPart "service" model.public
                         ] in
-                ( { model | uuid = (Uuid.toString uuid) },
-                  Http.send SubWS (Http.post subscribeEndpoint prt (succeed 200))
-                )
+            ( { model | uuid = (Uuid.toString uuid) },
+              Http.send SubWS (Http.post subscribeEndpoint prt (succeed 200))
+            )
         SubWS _ ->
             ( model, WebSocket.send webSocketEndpoint model.uuid )
         NewMsg jsn ->
@@ -121,6 +129,20 @@ view model =
                         , style [ ("width", "30px") ] ]
                         []
                       , (text " PushJet WebUI") ] ]
+            |> Navbar.customItems
+               [ Navbar.formItem []
+                   [ Input.text
+                       [ Input.attrs
+                           [ placeholder "Service Token"
+                           , onInput SavePub ] ]
+                   , Button.button
+                       [ Button.success
+                       , Button.attrs
+                           [ Spacing.ml2Sm
+                           , onClick Submit
+                           ]
+                       ]
+                       [ text "Go!" ] ] ]
             |> Navbar.view model.navbar
         , div [] (List.map msgToAlert model.messages)
         ]
