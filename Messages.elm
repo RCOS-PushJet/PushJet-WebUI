@@ -1,20 +1,20 @@
 module Messages exposing (..)
 
+import Bootstrap.Alert as Alert
 import Json.Decode
 
-type alias MessagePayloadJson = { message: MessagePayloadInnerJson }
+type alias MessagePushJet =
+    { message: MessagePayloadInnerJson
+    , alert  : Alert.Visibility }
 type alias MessagePayloadInnerJson =
     { title     : String
     , message   : String
     , link      : String
-    , level     : Int
-    }
-
-type MessagePushJet
-    = MessagePayload MessagePayloadJson
+    , level     : Int }
 
 messagePayloadDecoder =
-    Json.Decode.map  MessagePayloadJson (Json.Decode.field "message" messagePayloadInnerDecoder)
+    Json.Decode.map2 MessagePushJet (Json.Decode.field "message" messagePayloadInnerDecoder)
+                                    (Json.Decode.succeed Alert.shown)
 messagePayloadInnerDecoder =
     Json.Decode.map4 MessagePayloadInnerJson (Json.Decode.field "title"   Json.Decode.string)
                                              (Json.Decode.field "message" Json.Decode.string)
@@ -23,6 +23,6 @@ messagePayloadInnerDecoder =
 
 messagePushJetDecoder json =
     case Json.Decode.decodeString messagePayloadDecoder json of
-        Ok ok -> Ok (MessagePayload ok)
+        Ok ok -> Ok ok
         Err _ -> Err "Could not parse JSON"
 -- vim:ft=haskell:

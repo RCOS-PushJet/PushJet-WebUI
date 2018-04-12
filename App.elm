@@ -6,8 +6,10 @@ import Json.Decode     exposing (..)
 import WebSocket
 import Array
 import Uuid
+import Color
 
 import Random.Pcg       as Random
+import Bootstrap.Text   as Text
 import Bootstrap.Alert  as Alert
 import Bootstrap.Navbar as Navbar
 import Bootstrap.CDN    as CDN
@@ -37,6 +39,7 @@ type Msg =
   | SubUuid   Uuid.Uuid
   | SubWS     (Result Http.Error Int)
   | NavbarMsg Navbar.State
+  | AlertMsg  MessagePushJet Alert.Visibility
 
 
 webSocketEndpoint = "ws://128.113.17.41:81/ws"
@@ -93,30 +96,54 @@ update msg model =
                     ( model , Cmd.none )
         NavbarMsg state ->
             ( { model | navbar = state }, Cmd.none )
+        AlertMsg msg visibility ->
+            let allMsgs = List.filter (\x -> x /= msg) model.messages in
+            -- order doesn't matter; we don't bother preserving it
+            ( { model | messages = { msg | alert = visibility } :: allMsgs },
+              Cmd.none
+            )
 
 
 view : Model -> Html Msg
 view model =
     Grid.container []
         [ CDN.stylesheet
-        , Navbar.config NavbarMsg
+          , Navbar.config NavbarMsg
             |> Navbar.withAnimation
             |> Navbar.collapseMedium
-            |> Navbar.info
+            |> Navbar.lightCustom (Color.rgb 0x47 0x64 0xad)
             |> Navbar.brand
-                 [ href "#" ]
-                 [ text "PushJet" ]
+                  [ href "#" ]
+                  [ div [ style [ ("color", "#ffffff") ] ]
+                      [ img
+                        [ src "https://files.readme.io/PBWzCbL3Qn2Trac8l1Vz_pushjet_jet.png"
+                        , class "d-inline-block align-top"
+                        , style [ ("width", "30px") ] ]
+                        []
+                      , (text " PushJet WebUI") ] ]
             |> Navbar.view model.navbar
         , div [] (List.map msgToAlert model.messages)
         ]
 
 msgToAlert msg =
-    case msg of
-        MessagePayload msg ->
-            Alert.simpleInfo []
-                [ Alert.h4 [] [ text msg.message.title ]
-                , text msg.message.message
-                , Alert.link [ href msg.message.link ] [ text "link" ]
-                ]
+    let children =
+        let child1 = [] in
+        let child2 = if msg.message.title == "" then [] else [ Alert.h4 [] [ text msg.message.title ] ] in
+        let child3 = [ text msg.message.message ] in
+        let child4 = if msg.message.link  == "" then [] else
+            [ text " "
+            , Alert.link [ href msg.message.link ] [ text "link"] ] in
+        child1 ++ child2 ++ child3 ++ child4 in
+    let alertType =
+        case msg.message.level of
+            4 -> Alert.warning
+            5 -> Alert.danger
+            _ -> Alert.light in
+    div [ class "mt-4" ]
+        [ Alert.config
+            |> alertType
+            |> Alert.dismissable (AlertMsg msg)
+            |> Alert.children children
+            |> Alert.view msg.alert ]
 
 -- -- vim:ft=haskell:
